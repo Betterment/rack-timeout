@@ -5,23 +5,26 @@ require_relative "support/timeout"
 
 module Rack
   class Timeout
-
+    HIJACK_FREQUENCY = (f = ENV["RACK_TIMEOUT_HIJACK_FREQUENCY"]) ? f.to_f : 1.0 # 100% default
 
     module EnvHijack
+      SKIP = %w{ < <= == > >= [] === != <=> =~ !~ ! fetch values_at length size count itself }.map(&:to_sym).freeze
 
       def self.hijack! env
+        Rails.logger.warn "source=rack-timeout-debug injected"
+
         class << env
-          Hash.instance_methods.each do |m|
-            prev_method = instance_method(m)
-            define_method(m.to_s.sub(/(?=[!?]?$)/, "_without_hijack")) { |*a,&b| prev_method.bind(self).call *a,&b }
+          (Hash.instance_methods.reject { |i| i =~ /^__|\?$/ } - SKIP).each do |m|
+
+            define_method(m.to_s.sub(/(?=[!=]?$)/, "_without_hijack")) { |*a,&b| Hash.instance_method(m).bind(self).call *a,&b }
 
             define_method m do |*a,&b|
-              has_rt_info_before = member_without_hijack? "rack-timeout.info" #Rack::Timeout::ENV_INFO_KEY
-              result = prev_method.bind(self).call *a, &b
-              has_rt_info_after = member_without_hijack? "rack-timeout.info"  #Rack::Timeout::ENV_INFO_KEY
+              has_rt_info_before = member? "rack-timeout.info" # Rack::Timeout::ENV_INFO_KEY
+              result = super *a,&b
+              has_rt_info_after = member? "rack-timeout.info"
               if has_rt_info_before && !has_rt_info_after
                 caller.each_with_index do |line, ix|
-                  $stderr.write "source=rack-timeout-debug id=#{req_id} ix=#{ix} call=#{line}\n"
+                  Rails.logger.warn "source=rack-timeout-debug id=#{req_id} ix=#{ix} call=#{line}\n"
                 end
               end
               return result
@@ -115,7 +118,9 @@ module Rack
       info      = (env[ENV_INFO_KEY] ||= RequestDetails.new)
       info.id ||= env["HTTP_X_REQUEST_ID"] || SecureRandom.hex
 
-      EnvHijack.hijack!(env) unless env.respond_to? :req_id
+      if rand < HIJACK_FREQUENCY
+        EnvHijack.hijack!(env) unless env.respond_to? :req_id
+      end
 
       time_started_service = Time.now                      # The time the request started being processed by rack
       time_started_wait    = RT._read_x_request_start(env) # The time the request was initially received by the web server (if available)
@@ -203,7 +208,7 @@ module Rack
       raise "Invalid state: #{state.inspect}" unless VALID_STATES.include? state
       info = env[ENV_INFO_KEY]
       if info.nil?
-        $stderr.write "source=rack-timeout-debug info-vanish id=#{env.req_id}\n"
+        Rails.logger.warn "source=rack-timeout-debug info-vanish id=#{env.respond_to?(:req_id) ? env.req_id : env["HTTP_X_REQUEST_ID"]}\n"
         return
       end
       info.state = state

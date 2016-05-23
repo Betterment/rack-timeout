@@ -33,7 +33,7 @@ module Rack
           end
 
           def req_id
-            @req_id ||= fetch_without_hijack("HTTP_X_REQUEST_ID", nil) || SecureRandom.hex
+            @req_id ||= self["HTTP_X_REQUEST_ID"] || SecureRandom.hex
           end
 
         end

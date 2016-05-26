@@ -38,6 +38,10 @@ class Rack::Timeout::StateChangeLoggingObserver
   # generates the actual log string
   def log_state_change(env)
     info = env[::Rack::Timeout::ENV_INFO_KEY]
+    if info.nil?
+      Rails.logger.warn "source=rack-timeout-debug info-vanish id=#{env.respond_to?(:req_id) ? env.req_id : env["HTTP_X_REQUEST_ID"]}\n"
+      return
+    end
     level = STATE_LOG_LEVEL[info.state]
     logger(env).send(level) do
       s  = "source=rack-timeout"

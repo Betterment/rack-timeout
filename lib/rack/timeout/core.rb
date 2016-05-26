@@ -15,9 +15,6 @@ module Rack
 
         class << env
           (Hash.instance_methods.reject { |i| i =~ /^__|\?$/ } - SKIP).each do |m|
-
-            define_method(m.to_s.sub(/(?=[!=]?$)/, "_without_hijack")) { |*a,&b| Hash.instance_method(m).bind(self).call *a,&b }
-
             define_method m do |*a,&b|
               has_rt_info_before = member? "rack-timeout.info" # Rack::Timeout::ENV_INFO_KEY
               result = super *a,&b
@@ -29,7 +26,6 @@ module Rack
               end
               return result
             end
-
           end
 
           def req_id

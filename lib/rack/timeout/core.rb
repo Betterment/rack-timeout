@@ -5,7 +5,7 @@ require_relative "support/timeout"
 
 module Rack
   class Timeout
-    HIJACK_FREQUENCY = (f = ENV["RACK_TIMEOUT_HIJACK_FREQUENCY"]) ? f.to_f : 1.0 # 100% default
+    HIJACK_FREQUENCY = (f = ENV["RACK_TIMEOUT_HIJACK_FREQUENCY"]) ? f.to_f : 0.0 # 0% default
 
     module EnvHijack
       SKIP = %w{ < <= == > >= [] === != <=> =~ !~ ! fetch values_at length size count itself }.map(&:to_sym).freeze
